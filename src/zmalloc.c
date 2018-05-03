@@ -51,7 +51,7 @@ static void zmalloc_default_oom(size_t size) {
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
 void *zmalloc(size_t size) {
-    void *ptr = malloc(size+PREFIX_SIZE);
+    void *ptr = zmalloc(size+PREFIX_SIZE);
 
     if (!ptr) zmalloc_oom_handler(size);
 #ifdef HAVE_MALLOC_SIZE
@@ -59,7 +59,7 @@ void *zmalloc(size_t size) {
     return ptr;
 #else
     *((size_t*)ptr) = size;
-    update_zmalloc_stat_alloc(ptr+PREFIX_SIZE);
+    update_zmalloc_stat_alloc(size+PREFIX_SIZE);
     return (char*)ptr+PREFIX_SIZE;
 #endif
 }
@@ -73,7 +73,7 @@ void *zcalloc(size_t size) {
     return ptr;
 #else
     *((size_t*)ptr) = size;
-    update_zmalloc_stat_alloc(ptr+PREFIX_SIZE);
+    update_zmalloc_stat_alloc(size+PREFIX_SIZE);
     return (char*)ptr+PREFIX_SIZE;
 #endif
 }
@@ -117,7 +117,7 @@ void zfree(void *ptr) {
 #else
     void *realptr = (char*)ptr-PREFIX_SIZE;
     size_t oldsize = *((size_t*)realptr);
-    update_zmalloc_stat_free(realsize+PREFIX_SIZE);
+    update_zmalloc_stat_free(oldsize+PREFIX_SIZE);
     free(realptr);
 #endif
 }

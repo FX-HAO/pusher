@@ -1,9 +1,16 @@
-#include "anet.h"
-
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
 #include <netdb.h>
+#include <errno.h>
+
+#include "anet.h"
 
 static void anetSetError(char *err, const char *fmt, ...)
 {
@@ -141,7 +148,7 @@ static int anetTcpGenericConnect(char *err, char *addr, int port, int flags)
     hints.ai_flags = 0;
     hints.ai_protocol = 0;          /* Any protocol */
 
-    if ((err = getaddrinfo(addr, portstr, &hints, &servinfo) != 0) {
+    if ((rv = getaddrinfo(addr, portstr, &hints, &servinfo)) != 0) {
         anetSetError(err, "%s", gai_strerror(rv));
         return ANET_ERR;
     }
@@ -218,7 +225,7 @@ static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backl
     char portstr[6];
     struct addrinfo hints, *servinfo, *sp;
 
-    snprintf(_port, 6, "%d", port);
+    snprintf(portstr, 6, "%d", port);
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = af;
     hints.ai_socktype = SOCK_STREAM;
@@ -232,16 +239,16 @@ static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backl
         anetSetError(err, "%s", gai_strerror(rv));
         return ANET_ERR;
     }
-    for (p = servinfo; p != NULL; p = p->ai_next) {
-        if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1)
+    for (sp = servinfo; sp != NULL; sp = sp->ai_next) {
+        if ((s = socket(sp->ai_family,sp->ai_socktype,sp->ai_protocol)) == -1)
             continue;
 
         if (af == AF_INET6 && anetV6Only(err,s) == ANET_ERR) goto error;
         if (anetSetReuseAddr(err,s) == ANET_ERR) goto error;
-        if (anetListen(err,s,p->ai_addr,p->ai_addrlen,backlog) == ANET_ERR) s = ANET_ERR;
+        if (anetListen(err,s,sp->ai_addr,sp->ai_addrlen,backlog) == ANET_ERR) s = ANET_ERR;
         goto end;
     }
-    if (p == NULL) {
+    if (sp == NULL) {
         anetSetError(err, "unable to bind socket, errno: %d", errno);
         goto error;
     }

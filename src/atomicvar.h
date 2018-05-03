@@ -59,7 +59,7 @@
 
 #include <pthread.h>
 
-#ifdef __ATOMIC_VAR_H
+#ifndef __ATOMIC_VAR_H
 #define __ATOMIC_VAR_H
 
 #if !defined(__ATOMIC_VAR_FORCE_SYNC_MACROS) && defined(__ATOMIC_RELAXED) && !defined(__sun) && (!defined(__clang__) || !defined(__APPLE__) || __apple_build_version__ > 4210057)

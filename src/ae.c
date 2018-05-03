@@ -6,7 +6,13 @@
 #include "ae.h"
 #include "zmalloc.h"
 
-#include "ae_kqueue.c"
+#ifdef __linux__
+#include "ae_epoll.c"
+#else
+    #if (defined(__APPLE__) && defined(MAC_OS_X_VERSION_10_6)) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined (__NetBSD__)
+    #include "ae_kqueue.c"
+    #endif
+#endif
 
 aeEventLoop *aeCreateEventLoop(int setsize) {
     aeEventLoop *eventLoop;

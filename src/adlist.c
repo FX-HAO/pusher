@@ -38,14 +38,14 @@ void listRelease(list *list) {
 list *listAddNodeHead(list *list, void* value) {
     listNode *node;
 
-    if ((node = malloc(sizeof(*node))) == NULL) return NULL;
+    if ((node = zmalloc(sizeof(*node))) == NULL) return NULL;
     node->value = value;
     if (list->len == 0) {
         list->head = list->tail = node;
         node->prev = node->next = NULL;
     } else {
         node->prev = NULL;
-        node->next = list->head
+        node->next = list->head;
         list->head->prev = node;
         list->head = node;
     }
@@ -56,7 +56,7 @@ list *listAddNodeHead(list *list, void* value) {
 list *listAddNodeTail(list *list, void* value) {
     listNode *node;
 
-    if ((node = malloc(sizeof(*node))) == NULL) return NULL;
+    if ((node = zmalloc(sizeof(*node))) == NULL) return NULL;
     node->value = value;
     if (list->len == 0) {
         list->head = list->tail = node;
@@ -74,7 +74,7 @@ list *listAddNodeTail(list *list, void* value) {
 list *listInsertNode(list *list, listNode *old_value, void *value, int after) {
     listNode *node;
 
-    if ((node = malloc(sizeof(*node))) == NULL) return NULL;
+    if ((node = zmalloc(sizeof(*node))) == NULL) return NULL;
     node->value = value;
     if (after) {
         node->prev = old_value;
@@ -116,15 +116,15 @@ list* listDup(list *orig) {
     list *copy;
     listNode *node;
 
-    if ((copy = listCreate() == NULL) return NULL;
-    copy.dup = orig.dup;
-    copy.free = orig.free;
-    copy.match = orig.match;
-    node = orig.head;
+    if ((copy = listCreate()) == NULL) return NULL;
+    copy->dup = orig->dup;
+    copy->free = orig->free;
+    copy->match = orig->match;
+    node = orig->head;
     while(node != NULL) {
         void *value;
 
-        if (list->dup) {
+        if (copy->dup) {
             value = copy->dup(node->value);
             if (value == NULL) {
                 listRelease(copy);

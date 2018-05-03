@@ -11,12 +11,12 @@ typedef struct aeApiState {
     struct kevent *events;
 } aeApiState;
 
-static int *aeApiCreate(aeEventLoop *eventLoop) {
+static int aeApiCreate(aeEventLoop *eventLoop) {
     aeApiState *state;
 
     state = zmalloc(sizeof(*state)->setsize);
     if (!state) return -1;
-    state->events = malloc(sizeof(struct kevent)*eventLoop->setsize);
+    state->events = zmalloc(sizeof(struct kevent)*eventLoop->setsize);
     if (!state->events) {
         zfree(state);
         return -1;
@@ -62,7 +62,7 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     return 0;
 }
 
-static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
+static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
     aeApiState *state = eventLoop->apidata;
     struct kevent ke;
 
