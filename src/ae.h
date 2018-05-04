@@ -2,9 +2,12 @@
 #define __AE_H__
 
 #include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #define AE_OK 0
 #define AE_ERR -1
+#define ANET_ERR_LEN 256
 
 #define AE_NONE 0       /* No events registered. */
 #define AE_READABLE 1   /* Fire when descriptor is readable. */
@@ -12,7 +15,7 @@
 
 #define AE_FILE_EVENTS 1
 #define AE_TIME_EVENTS 2
-#define AE_ALL_EVENTS (AE_FILE_EVENT | AE_TIME_EVENT)
+#define AE_ALL_EVENTS (AE_FILE_EVENTS | AE_TIME_EVENTS)
 #define AE_DONT_WAIT 4
 #define AE_CALL_AFTER_SLEEP 8
 
@@ -41,8 +44,8 @@ typedef struct aeTimeEvent {
     aeTimeProc *timeProc;
     aeEventFinalizerProc *finalizerProc;
     void *clientData;
-    aeTimeEvent *prev;
-    aeTimeEvent *next;
+    struct aeTimeEvent *prev;
+    struct aeTimeEvent *next;
 } aeTimeEvent;
 
 typedef struct aeFiredEvent {

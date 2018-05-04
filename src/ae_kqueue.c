@@ -14,7 +14,7 @@ typedef struct aeApiState {
 static int aeApiCreate(aeEventLoop *eventLoop) {
     aeApiState *state;
 
-    state = zmalloc(sizeof(*state)->setsize);
+    state = zmalloc(sizeof(*state)*eventLoop->setsize);
     if (!state) return -1;
     state->events = zmalloc(sizeof(struct kevent)*eventLoop->setsize);
     if (!state->events) {
@@ -84,9 +84,9 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
         struct timespec timeout;
         timeout.tv_sec = tvp->tv_sec;
         timeout.tv_nsec = tvp->tv_usec * 1000;
-        nev = kevent(state->kqfd, NULL, 0, state->events, eventLoop->setsize, &timeout)
+        nev = kevent(state->kqfd, NULL, 0, state->events, eventLoop->setsize, &timeout);
     } else {
-        nev = kevent(state->kqfd, NULL, 0, state->events, eventLoop->setsize, NULL)
+        nev = kevent(state->kqfd, NULL, 0, state->events, eventLoop->setsize, NULL);
     }
 
     if (nev > 0) {
@@ -94,12 +94,12 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
 
         for (i = 0; i < nev; i++) {
             int mask = 0;
-            struct kevent *e = state->events[j];
+            struct kevent *e = state->events+i;
 
             if (e->filter & EVFILT_READ) mask |= AE_READABLE;
             if (e->filter & EVFILT_WRITE) mask |= AE_WRITABLE;
-            eventLoop->fired[i]->fd = e->ident;
-            eventLoop->fired[i]->mask = mask;
+            eventLoop->fired[i].fd = e->ident;
+            eventLoop->fired[i].mask = mask;
         }
     }
     return nev;

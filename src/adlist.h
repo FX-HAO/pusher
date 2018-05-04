@@ -44,5 +44,6 @@ list *listAddNodeTail(list *list, void* value);
 list *listInsertNode(list *list, listNode *old_value, void *value, int after);
 void listDelNode(list *list, listNode *node);
 list* listDup(list *list);
+void listRotate(list *list);
 
 #endif /* __ADLIST_H__ */

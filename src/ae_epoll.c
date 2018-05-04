@@ -8,12 +8,12 @@
 typedef struct aeApiState {
     int epfd;
     struct epoll_event *events;
-}
+} aeApiState;
 
 static int aeApiCreate(aeEventLoop *eventLoop) {
     aeApiState *state;
 
-    state = zmalloc(sizeof(*state)->setsize);
+    state = zmalloc(sizeof(*state)*eventLoop->setsize);
     if (!state) return -1;
     state->events = zmalloc(sizeof(struct epoll_event)*eventLoop->setsize);
     if (!state->events) {
@@ -21,7 +21,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         return -1;
     }
     state->epfd = epoll_create1(0);
-    if (state->kqfd == -1) {
+    if (state->epfd == -1) {
         zfree(state->events);
         zfree(state);
         return -1;
@@ -62,12 +62,12 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
 static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
     aeApiState *state = eventLoop->apidata;
     struct epoll_event ev;
-    int mask = state->events[fd].mask & (~delmask);
+    int mask = eventLoop->events[fd].mask & (~delmask);
 
     ev.events = 0;
-    if (mask & AE_READABLE) ee.events |= EPOLLIN;
-    if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
-    ee.data.fd = fd;
+    if (mask & AE_READABLE) ev.events |= EPOLLIN;
+    if (mask & AE_WRITABLE) ev.events |= EPOLLOUT;
+    ev.data.fd = fd;
     if (mask & AE_NONE) {
         epoll_ctl(state->epfd, EPOLL_CTL_DEL, fd, &ev);
     } else {

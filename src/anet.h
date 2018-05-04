@@ -1,15 +1,12 @@
 #ifndef __ANET_H
 #define __ANET_H
 
+#include <stdarg.h>
 #include <sys/types.h>
 
 #define ANET_OK 0
 #define ANET_ERR -1
 #define ANET_ERR_LEN 256
-
-#define ANET_CONNECT_NONE 0
-#define ANET_CONNECT_NONBLOCK 1
-#define ANET_CONNECT_BE_BINDING 2 /* Best effort binding. */
 
 int anetTcpConnect(char *err, char *addr, int port);
 int anetTcpNonBlockConnect(char *err, char *addr, int port);
@@ -22,12 +19,9 @@ int anetResolve(char *err, char *host, char *ipbuf, size_t ipbuf_len);
 int anetResolveIP(char *err, char *host, char *ipbuf, size_t ipbuf_len);
 int anetTcpServer(char *err, int port, char *bindaddr, int backlog);
 int anetTcp6Server(char *err, int port, char *bindaddr, int backlog);
-int anetUnixServer(char *err, char *path, mode_t perm, int backlog);
 int anetTcpAccept(char *err, int serversock, char *ip, size_t ip_len, int *port);
-int anetUnixAccept(char *err, int serversock);
 int anetWrite(int fd, char *buf, int count);
 int anetNonBlock(char *err, int fd);
-int anetBlock(char *err, int fd);
 int anetEnableTcpNoDelay(char *err, int fd);
 int anetDisableTcpNoDelay(char *err, int fd);
 int anetTcpKeepAlive(char *err, int fd);

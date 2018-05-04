@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -11,8 +12,10 @@
 #include <pthread.h>
 #include <syslog.h>
 #include <signal.h>
+#include <stdint.h>
 
 #include "zmalloc.h"
+#include "adlist.h"
 #include "anet.h"
 #include "ae.h"
 
@@ -23,7 +26,8 @@
 #define LL_VERBOSE 1
 #define LL_NOTICE 2
 #define LL_WARNING 3
-#define CONFIG_DEFAULT_VERBOSITY LL_NOTICE
+#define LL_RAW (1<<10) /* Modifier to log without timestamp */
+#define CONFIG_DEFAULT_VERBOSITY LL_DEBUG
 
 /* Error codes */
 #define C_OK                    0
@@ -31,6 +35,9 @@
 
 /* Anti-warning macro... */
 #define UNUSED(x) ((void) x)
+
+/* We can print the stacktrace, so our assert is defined this way: */
+#define serverPanic(...) _serverPanic(__FILE__,__LINE__,__VA_ARGS__),_exit(1)
 
 /* Using the following macro you can run code inside serverCron() with the
  * specified period, specified in milliseconds.
@@ -49,6 +56,7 @@ typedef struct client {
     time_t ctime;
     time_t lastinteraction;
     int flags;
+    listNode *client_list_node;
 
     /* Response buffer */
     int bufpos;
@@ -57,13 +65,16 @@ typedef struct client {
 
 /* Static server configuration */
 #define CONFIG_DEFAULT_HZ        10      /* Time interrupt calls/sec. */
-#define CONFIG_DEFAULT_SERVER_PORT        6379    /* TCP port */
-#define CONFIG_DEFAULT_CLIENT_TIMEOUT       0       /* default client timeout: infinite */
+#define CONFIG_DEFAULT_SERVER_PORT       9528    /* TCP port */
+#define CONFIG_DEFAULT_CLIENT_TIMEOUT    30      /* default client timeout: infinite */
+#define CONFIG_DEFAULT_TCP_BACKLOG       511     /* TCP listen backlog */
 #define CONFIG_DEFAULT_TCP_KEEPALIVE 300
 #define CONFIG_DEFAULT_MAX_CLIENTS 10000
 #define CONFIG_DEFAULT_MAXMEMORY 0
 #define CONFIG_BINDADDR_MAX 16
 #define CONFIG_MIN_RESERVED_FDS 32
+#define NET_IP_STR_LEN 46 /* INET6_ADDRSTRLEN is 46, but we need to be sure */
+#define LOG_MAX_LEN    1024 /* Default maximum length of syslog messages */
 
 /* When configuring the server eventloop, we setup it so that the total number
  * of file descriptors we can handle are server.maxclients + RESERVED_FDS +
@@ -74,14 +85,26 @@ typedef struct client {
 struct server {
     /* General */
     pid_t pid;                  /* Main process pid. */
+    aeEventLoop *el;
+    size_t initial_memory_usage; /* Bytes used after initialization. */
 
     int ipfd[CONFIG_BINDADDR_MAX]; /* TCP socket file descriptors */
     int ipfd_count;             /* Used slots in ipfd[] */
+    list *clients;              /* List of active clients */
     int hz;                     /* serverCron() calls frequency in hertz */
     int cronloops;              /* Number of times the cron function run */
 
     /* Networking */
     int port;
+    int tcp_backlog;            /* TCP listen() backlog */
+    char *bindaddr[CONFIG_BINDADDR_MAX]; /* Addresses we should bind to */
+    int bindaddr_count;         /* Number of addresses in server.bindaddr[] */
+    uint64_t next_client_id;    /* Next client unique ID. Incremental. */
+    char neterr[ANET_ERR_LEN];   /* Error buffer for anet.c */
+
+    /* time cache */
+    time_t unixtime;
+    long long mstime;   /* Like 'unixtime' but with milliseconds resolution. */
 
     /* Configuration */
     int verbosity;                  /* Loglevel */
@@ -92,14 +115,23 @@ struct server {
     unsigned int maxclients;            /* Max number of simultaneous clients */
     unsigned long long maxmemory;   /* Max number of memory bytes to use */
 
+    /* Fields used only for stats */
+    long long stat_rejected_conn;   /* Clients rejected because of maxclients */
+
+    /* System hardware info */
+    size_t system_memory_size;  /* Total memory in system as reported by OS */
+
     /* Mutexes used to protect atomic variables when atomic builtins are
      * not available. */
     pthread_mutex_t next_client_id_mutex;
-}
+};
+
+extern struct server server;
 
 /* Utils */
 long long ustime(void);
 long long mstime(void);
+void serverLog(int level, const char *fmt, ...);
 
 /* networking.c -- Networking and Client related operations */
 client *createClient(int fd);
@@ -108,5 +140,8 @@ void freeClient(client *c);
 void freeClientAsync(client *c);
 void resetClient(client *c);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
+
+/* Debugging stuff */
+void _serverPanic(const char *file, int line, const char *msg, ...);
 
 #endif /* __SERVER_H__ */

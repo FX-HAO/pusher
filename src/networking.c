@@ -9,6 +9,18 @@ void linkClient(client *c) {
     c->client_list_node = listLast(server.clients);
 }
 
+#define READ_MESSAGE_LENGTH (16*1024)
+void echoMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
+    // client *c = (client*) privdata;
+    int nread, nwrite;
+    char readbuf[READ_MESSAGE_LENGTH];
+    UNUSED(el);
+    UNUSED(mask);
+
+    nread = read(fd, readbuf, READ_MESSAGE_LENGTH);
+    nwrite = write(fd, readbuf, nread);
+}
+
 client *createClient(int fd) {
     client *c;
 
@@ -16,10 +28,10 @@ client *createClient(int fd) {
     if (fd != -1) {
         anetNonBlock(NULL, fd);
         anetEnableTcpNoDelay(NULL, fd);
-        if（server.tcpkeepalive)
-            anetTcpKeepAlive(NULL, fd, server.tcpkeepalive);
+        if (server.tcpkeepalive)
+            anetKeepAlive(NULL, fd, server.tcpkeepalive);
         if (aeCreateFileEvent(server.el, fd, AE_READABLE, 
-            , NULL) == AE_ERR) 
+            echoMessageFromClient, c) == AE_ERR) 
         {
             close(fd);
             zfree(c);
@@ -31,6 +43,7 @@ client *createClient(int fd) {
     atomicGetIncr(server.next_client_id, client_id, 1);
     c->id = client_id;
     c->fd = fd;
+    c->reply = listCreate();
     c->bufpos = 0;
     c->ctime = c->lastinteraction = server.unixtime;
     c->flags = 0;
@@ -39,7 +52,7 @@ client *createClient(int fd) {
 }
 
 void unlinkClient(client *c) {
-    if (c->fd != -1) 
+    if (c->fd == -1) 
         return;
 
     /* Remove from the list of active clients. */
@@ -49,8 +62,8 @@ void unlinkClient(client *c) {
     }
 
     /* Unregister async I/O handlers and close the socket. */
-    aeDeleteFileEvent(server.el,c->fd,AE_READABLE);
-    aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
+    aeDeleteFileEvent(server.el, c->fd, AE_READABLE);
+    aeDeleteFileEvent(server.el, c->fd, AE_WRITABLE);
     close(c->fd);
     c->fd = -1;
 }
@@ -102,11 +115,11 @@ int writeToClient(int fd, client *c, int handler_installed) {
         }
     }
     if (totwritten > 0) {
-        if (!(c->flags & CLIENT_MASTER)) c->lastinteraction = server.unixtime;
+        c->lastinteraction = server.unixtime;
     }
     if (!c->bufpos) {
         c->sentlen = 0;
-        if (handler_installed) aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);        
+        if (handler_installed) aeDeleteFileEvent(server.el, c->fd, AE_WRITABLE);        
     }
     return C_OK;
 }

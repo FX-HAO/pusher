@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <sys/time.h>
 #include <time.h>
+#include <string.h>
 #include <errno.h>
 #include <poll.h>
 
@@ -9,9 +11,9 @@
 #ifdef __linux__
 #include "ae_epoll.c"
 #else
-    #if (defined(__APPLE__) && defined(MAC_OS_X_VERSION_10_6)) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined (__NetBSD__)
+    // #if (defined(__APPLE__) && defined(MAC_OS_X_VERSION_10_6)) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined (__NetBSD__)
     #include "ae_kqueue.c"
-    #endif
+    // #endif
 #endif
 
 aeEventLoop *aeCreateEventLoop(int setsize) {
@@ -32,7 +34,7 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     if (aeApiCreate(eventLoop) == -1) goto err;
     for (i = 0; i < setsize; i++)
         eventLoop->events[i].mask = AE_NONE;
-    return aeEventLoop;
+    return eventLoop;
 
 err:
     if (eventLoop) {
@@ -44,7 +46,7 @@ err:
 }
 
 void aeDeleteEventLoop(aeEventLoop *eventLoop) {
-    aeApiFree(aeEventLoop);
+    aeApiFree(eventLoop);
     zfree(eventLoop->fired);
     zfree(eventLoop->events);
     zfree(eventLoop);
@@ -74,7 +76,7 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
 
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask) {
     if (fd > eventLoop->maxfd) return;
-    aeFileEvent *fe = eventLoop->events[fd];
+    aeFileEvent *fe = &eventLoop->events[fd];
     if (mask | AE_NONE) return;
 
     aeApiDelEvent(eventLoop, fd, mask);
@@ -83,7 +85,7 @@ void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask) {
         int i;
 
         for (i = eventLoop->maxfd-1; i >= 0; i--)
-            if (eventLoop->events[i]->mask != AE_NONE) break;
+            if (eventLoop->events[i].mask != AE_NONE) break;
         eventLoop->maxfd = i;
     }
 }
@@ -154,7 +156,7 @@ int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id) {
  * Note that's O(N) since time events are unsorted.
  */
 static aeTimeEvent *aeSearchNearestTimer(aeEventLoop *eventLoop) {
-    aeTimeEvent *te = aeEventLoop->timeEventHead;
+    aeTimeEvent *te = eventLoop->timeEventHead;
     aeTimeEvent *nearest = NULL;
     
     while (te != NULL) {
@@ -170,7 +172,6 @@ static aeTimeEvent *aeSearchNearestTimer(aeEventLoop *eventLoop) {
 static int processTimeEvents(aeEventLoop *eventLoop) {
     int processed = 0;
     aeTimeEvent *te;
-    long long maxId;
     time_t now = time(NULL);
 
     /* If the system clock is moved to the future, and then set back to the
@@ -191,7 +192,6 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
     eventLoop->lastTime = now;
 
     te = eventLoop->timeEventHead;
-    maxId = eventLoop->timeEventNextId - 1;
     while (te) {
         long now_sec, now_ms;
         long long id;
@@ -211,7 +211,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
             continue;
         }
 
-        aeGetTime(now_sec, now_ms);
+        aeGetTime(&now_sec, &now_ms);
         if (now_sec > te->when_sec ||
             (now_sec == te->when_sec && now_ms >= te->when_ms))
         {
@@ -220,7 +220,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
             id = te->id;
             retval = te->timeProc(eventLoop, id, te->clientData);
             if (retval != AE_NOMORE) {
-                aeAddMillisecondsToNow(retval, &te->when_sec, te->when_ms);
+                aeAddMillisecondsToNow(retval, &te->when_sec, &te->when_ms);
             } else {
                 te->id = AE_DELETED_EVENT_ID;
             }
@@ -268,7 +268,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags) {
             /* If we have to check for events but need to return
              * ASAP because of AE_DONT_WAIT we need to set the timeout
              * to zero */
-            if（flags & AE_DONT_WAIT) {
+            if (flags & AE_DONT_WAIT) {
                 tv.tv_sec = tv.tv_usec = 0;
                 tvp = &tv;
             } else {
@@ -286,7 +286,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags) {
             eventLoop->aftersleep(eventLoop);
 
         for (i = 0; i < numevents; i++) {
-            aeFileEvent *fe = eventLoop->fired[i];
+            aeFileEvent *fe = &eventLoop->events[eventLoop->fired[i].fd];
             int mask = eventLoop->fired[i].mask;
             int fd = eventLoop->fired[i].fd;
             int fired = 0; /* Number of events fired for current fd. */
@@ -339,7 +339,7 @@ void aeMain(aeEventLoop *eventLoop) {
     }
 }
 
-const char *aeGetApiName(void) {
+char *aeGetApiName(void) {
     return aeApiName();
 }
 
