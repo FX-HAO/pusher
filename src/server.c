@@ -198,6 +198,16 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     return 1000/server.hz;
 }
 
+/* This function gets called every time Redis is entering the
+ * main loop of the event driven library, that is, before to sleep
+ * for ready file descriptors. */
+void beforeSleep(struct aeEventLoop *eventLoop) {
+    UNUSED(eventLoop);
+
+    /* Handle writes with pending output buffers. */
+    handleClientsWithPendingWrites();
+}
+
 void initServerConfig(void) {
     pthread_mutex_init(&server.next_client_id_mutex, NULL);
 
@@ -367,6 +377,7 @@ void initServer(void) {
 
     server.pid = getpid();
     server.clients = listCreate();
+    server.clients_pending_write = listCreate();
     server.system_memory_size = zmalloc_get_memory_size();
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
@@ -417,6 +428,7 @@ int main(int argc, char **argv) {
 
     initServerConfig();
     initServer();
+    aeSetBeforeSleepProc(server.el,beforeSleep);
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

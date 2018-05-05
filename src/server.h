@@ -15,6 +15,7 @@
 #include <stdint.h>
 
 #include "zmalloc.h"
+#include "sds.h"
 #include "adlist.h"
 #include "anet.h"
 #include "ae.h"
@@ -36,6 +37,10 @@
 /* Anti-warning macro... */
 #define UNUSED(x) ((void) x)
 
+/* Client flags */
+#define CLIENT_PENDING_WRITE (1<<0) /* Client has output to send but a write
+                                       handler is yet not installed. */
+
 /* We can print the stacktrace, so our assert is defined this way: */
 #define serverPanic(...) _serverPanic(__FILE__,__LINE__,__VA_ARGS__),_exit(1)
 
@@ -52,6 +57,7 @@ typedef struct client {
     uint64_t id;
     int fd;
     list *reply;
+    unsigned long long reply_bytes;
     size_t sentlen;
     time_t ctime;
     time_t lastinteraction;
@@ -91,6 +97,7 @@ struct server {
     int ipfd[CONFIG_BINDADDR_MAX]; /* TCP socket file descriptors */
     int ipfd_count;             /* Used slots in ipfd[] */
     list *clients;              /* List of active clients */
+    list *clients_pending_write; /* There is to write or install handler. */
     int hz;                     /* serverCron() calls frequency in hertz */
     int cronloops;              /* Number of times the cron function run */
 
@@ -140,6 +147,7 @@ void freeClient(client *c);
 void freeClientAsync(client *c);
 void resetClient(client *c);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
+void echoMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
 
 /* Debugging stuff */
 void _serverPanic(const char *file, int line, const char *msg, ...);
