@@ -135,6 +135,9 @@ struct server {
 
 extern struct server server;
 
+/* Core functions */
+void serverLog(int level, const char *fmt, ...);
+
 /* Utils */
 long long ustime(void);
 long long mstime(void);
@@ -148,6 +151,7 @@ void freeClientAsync(client *c);
 void resetClient(client *c);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
 void echoMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
+int handleClientsWithPendingWrites(void);
 
 /* Debugging stuff */
 void _serverPanic(const char *file, int line, const char *msg, ...);
