@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <stdint.h>
 
+#include "util.h"
 #include "zmalloc.h"
 #include "sds.h"
 #include "adlist.h"
@@ -56,6 +57,8 @@ typedef long long mstime_t; /* millisecond time type. */
 typedef struct client {
     uint64_t id;
     int fd;
+    int argc;               /* Num of arguments of current command. */
+    sds **argv;            /* Arguments of current command. */
     list *reply;
     unsigned long long reply_bytes;
     size_t sentlen;
@@ -133,7 +136,23 @@ struct server {
     pthread_mutex_t next_client_id_mutex;
 };
 
+typedef void pusherCommandProc(client *c);
+struct pusherCommand {
+    char *name;
+    pusherCommandProc *proc;
+    int arity;
+    long long microseconds, calls;
+};
+
+/*-----------------------------------------------------------------------------
+ * Extern declarations
+ *----------------------------------------------------------------------------*/
+
 extern struct server server;
+
+/*-----------------------------------------------------------------------------
+ * Functions prototypes
+ *----------------------------------------------------------------------------*/
 
 /* Core functions */
 void serverLog(int level, const char *fmt, ...);
@@ -149,9 +168,21 @@ void closeTimedoutClients(void);
 void freeClient(client *c);
 void freeClientAsync(client *c);
 void resetClient(client *c);
+void addReplySds(client *c, sds s);
+void addReplyString(client *c, const char *s, size_t len);
+void addReplyLongLongWithPrefix(client *c, long long ll, char prefix);
+void addReplyLongLong(client *c, long long ll);
+void addReplyError(client *c, const char *err);
+void addReplyErrorFormat(client *c, const char *fmt, ...);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
 void echoMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
 int handleClientsWithPendingWrites(void);
+
+/* Commands prototypes */
+void pingCommand(client *c);
+
+/* pubsub.c -- Pub/Sub related operations */
+void publishCommand(client *c);
 
 /* Debugging stuff */
 void _serverPanic(const char *file, int line, const char *msg, ...);

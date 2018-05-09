@@ -12,7 +12,7 @@ endif
 FINAL_CFLAGS=$(STD) $(WARN) $(OPT) $(DEBUG) $(CFLAGS)
 DEBUG=-g -ggdb
 
-PUSHER_SERVER_OBJ=adlist.o ae.o anet.o zmalloc.o networking.o debug.o server.o sds.o
+PUSHER_SERVER_OBJ=adlist.o ae.o anet.o zmalloc.o networking.o debug.o server.o sds.o dict.o util.o siphash.o
 
 all: pusher-server
 
@@ -25,5 +25,5 @@ pusher-server: $(PUSHER_SERVER_OBJ)
 
 clean:
 	@echo "Cleaning up.."
-	-rm -rf *.o # - prefix for ignoring errors and continue execution
+	-rm -rf *.o
 	-rm pusher-server

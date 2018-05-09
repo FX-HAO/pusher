@@ -28,7 +28,7 @@ client *createClient(int fd) {
         if (server.tcpkeepalive)
             anetKeepAlive(NULL, fd, server.tcpkeepalive);
         if (aeCreateFileEvent(server.el, fd, AE_READABLE, 
-            echoMessageFromClient, c) == AE_ERR) 
+            readMessageFromClient, c) == AE_ERR) 
         {
             close(fd);
             zfree(c);
@@ -40,6 +40,8 @@ client *createClient(int fd) {
     atomicGetIncr(server.next_client_id, client_id, 1);
     c->id = client_id;
     c->fd = fd;
+    c->argc = 0;
+    c->argv = NULL;
     c->reply = listCreate();
     c->reply_bytes = 0;
     listSetFreeMethod(c->reply,freeClientReplyValue);
@@ -166,6 +168,35 @@ void addReplyString(client *c, const char *s, size_t len) {
     _addReplyStringToList(c,s,len);
 }
 
+void addReplyLongLongWithPrefix(client *c, long long ll, char prefix) {
+    char buf[128];
+    int len;
+
+    buf[0] = prefix;
+    len = ll2string(buf+1,sizeof(buf)-1,ll);
+    buf[len+1] = '\r';
+    buf[len+2] = '\n';
+    addReplyString(c,buf,len+3);
+}
+
+void addReplyLongLong(client *c, long long ll) {
+    addReplyLongLongWithPrefix(c,ll,':');
+}
+
+void addReplyError(client *c, const char *err) {
+    addReplyString(c,err,strlen(err));
+}
+
+void addReplyErrorFormat(client *c, const char *fmt, ...) {
+    size_t l, j;
+    va_list ap;
+    va_start(ap,fmt);
+    sds s = sdscatvprintf(sdsempty(),fmt,ap);
+    va_end(ap);
+    addReplyString(c,s,sdslen(s));
+    sdsfree(s);
+}
+
 int writeToClient(int fd, client *c, int handler_installed) {
     ssize_t nwritten = 0, totwritten = 0;
     size_t objlen;
@@ -268,7 +299,7 @@ int handleClientsWithPendingWrites(void) {
 }
 
 #define READ_MESSAGE_LENGTH (16*1024)
-void echoMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
+void readMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     client *c = (client*) privdata;
     int nread, nwrite;
     char readbuf[READ_MESSAGE_LENGTH];
@@ -276,5 +307,9 @@ void echoMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(mask);
 
     nread = read(fd, readbuf, READ_MESSAGE_LENGTH);
-    addReplyString(c, readbuf, nread);
+
+    /* build argc and argv */
+    c->argv = sdssplitlen(readbuf, nread, " ", 1, &c->argc);
+    pingCommand(c);
+    // addReplyString(c, readbuf, nread);
 }

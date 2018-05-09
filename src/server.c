@@ -12,6 +12,26 @@
 /* Global vars */
 struct server server; /* Server global state */
 
+struct pusherCommand pusherCommandTable[] = {
+    {"ping",pingCommand,0,0,0}
+};
+
+/* The PING command. It works in a different way if the client is in
+ * in Pub/Sub mode. */
+void pingCommand(client *c) {
+    /* The command takes zero or one arguments. */
+    if (c->argc > 2) {
+        addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
+            "ping");
+        return;
+    }
+
+    if (c->argc == 1)
+        addReplySds(c, sdsnew("PONG"));
+    else
+        addReplySds(c,c->argv[1]);
+}
+
 /* Return the UNIX time in microseconds */
 long long ustime(void) {
     struct timeval tv;

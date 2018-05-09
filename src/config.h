@@ -10,4 +10,6 @@
 #include <features.h>
 #endif
 
+#define NDEBUG
+
 #endif /* __CONFIG_H */
