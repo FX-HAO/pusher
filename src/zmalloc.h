@@ -1,6 +1,8 @@
 #ifndef __ZMALLOC_H
 #define __ZMALLOC_H
 
+#include "config.h"
+
 #if defined(USE_TCMALLOC)
 #include <google/tcmalloc.h>
 #if (TC_VERSION_MAJOR == 1 && TC_VERSION_MINOR >= 6) || (TC_VERSION_MAJOR > 1)
@@ -41,5 +43,13 @@ void zfree(void *ptr);
 char *zstrdup(const char *s);
 size_t zmalloc_used_memory(void);
 size_t zmalloc_get_memory_size(void);
+
+void *debug_zmalloc(size_t size, const char *file, int line, const char *func);
+void debug_zfree(void *ptr, const char *file, int line, const char *func);
+
+#ifdef DEBUG_ZMALLOC
+#define zmalloc(X) (debug_zmalloc(X, __FILE__, __LINE__, __FUNCTION__))
+#define zfree(X) (debug_zfree(X, __FILE__, __LINE__, __FUNCTION__))
+#endif
 
 #endif /* __ZMALLOC_H */

@@ -12,4 +12,7 @@
 
 #define NDEBUG
 
+/* Enable debugging zmalloc */
+#define DEBUG_ZMALLOC
+
 #endif /* __CONFIG_H */

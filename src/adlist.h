@@ -3,6 +3,10 @@
 #ifndef __ADLIST_H__
 #define __ADLIST_H__
 
+/* Directions for iterators */
+#define AL_START_HEAD 0
+#define AL_START_TAIL 1
+
 /* Node, List, and Iterator are the only data structures used currently. */
 
 typedef struct listNode {
@@ -10,6 +14,11 @@ typedef struct listNode {
     struct listNode *next;
     void *value;
 } listNode;
+
+typedef struct listIter {
+    listNode *next;
+    int direction;
+} listIter;
 
 typedef struct list {
     struct listNode *head;
@@ -43,6 +52,12 @@ list *listAddNodeHead(list *list, void* value);
 list *listAddNodeTail(list *list, void* value);
 list *listInsertNode(list *list, listNode *old_value, void *value, int after);
 void listDelNode(list *list, listNode *node);
+listIter *listGetIterator(list *list, int direction);
+listNode *listNext(listIter *iter);
+void listReleaseIterator(listIter *iter);
+void listRewind(list *list, listIter *li);
+void listRewindTail(list *list, listIter *li);
+listNode *listSearchKey(list *list, void *key);
 list* listDup(list *list);
 void listRotate(list *list);
 

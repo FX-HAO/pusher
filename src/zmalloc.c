@@ -50,6 +50,8 @@ static void zmalloc_default_oom(size_t size) {
 
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
+#pragma push_macro("zmalloc")
+#undef zmalloc
 void *zmalloc(size_t size) {
     void *ptr = malloc(size+PREFIX_SIZE);
 
@@ -63,6 +65,14 @@ void *zmalloc(size_t size) {
     return (char*)ptr+PREFIX_SIZE;
 #endif
 }
+
+void *debug_zmalloc(size_t size, const char *file, int line, const char *func)
+{
+    void *ptr = zmalloc(size);
+    printf("Allocated = %s, %i, %s, %p[%li]\n", file, line, func, ptr, size);
+    return ptr;
+}
+#pragma pop_macro("zmalloc")
 
 void *zcalloc(size_t size) {
     void *ptr = calloc(1, size+PREFIX_SIZE);
@@ -108,6 +118,8 @@ void *zrealloc(void *ptr, size_t size) {
 #endif
 }
 
+#pragma push_macro("zfree")
+#undef zfree
 void zfree(void *ptr) {
     if (NULL == ptr) return; 
 
@@ -121,6 +133,14 @@ void zfree(void *ptr) {
     free(realptr);
 #endif
 }
+
+void debug_zfree(void *ptr, const char *file, int line, const char *func)
+{
+    size_t size = zmalloc_size(ptr);
+    zfree(ptr);
+    printf("Freed = %s, %i, %s, %p[%li]\n", file, line, func, ptr, size);
+}
+#pragma pop_macro("zfree")
 
 char *zstrdup(const char *s) {
     size_t l = strlen(s) + 1;

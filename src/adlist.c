@@ -141,6 +141,95 @@ list* listDup(list *orig) {
     return copy;
 }
 
+/* Returns a list iterator 'iter'. After the initialization every
+ * call to listNext() will return the next element of the list.
+ *
+ * This function can't fail. */
+listIter *listGetIterator(list *list, int direction)
+{
+    listIter *iter;
+
+    if ((iter = zmalloc(sizeof(*iter))) == NULL) return NULL;
+    if (direction == AL_START_HEAD)
+        iter->next = list->head;
+    else
+        iter->next = list->tail;
+    iter->direction = direction;
+    return iter;
+}
+
+/* Release the iterator memory */
+void listReleaseIterator(listIter *iter) {
+    zfree(iter);
+}
+
+/* Create an iterator in the list private iterator structure */
+void listRewind(list *list, listIter *li) {
+    li->next = list->head;
+    li->direction = AL_START_HEAD;
+}
+
+void listRewindTail(list *list, listIter *li) {
+    li->next = list->tail;
+    li->direction = AL_START_TAIL;
+}
+
+/* Return the next element of an iterator.
+ * It's valid to remove the currently returned element using
+ * listDelNode(), but not to remove other elements.
+ *
+ * The function returns a pointer to the next element of the list,
+ * or NULL if there are no more elements, so the classical usage patter
+ * is:
+ *
+ * iter = listGetIterator(list,<direction>);
+ * while ((node = listNext(iter)) != NULL) {
+ *     doSomethingWith(listNodeValue(node));
+ * }
+ *
+ * */
+listNode *listNext(listIter *iter)
+{
+    listNode *current = iter->next;
+
+    if (current != NULL) {
+        if (iter->direction == AL_START_HEAD)
+            iter->next = current->next;
+        else
+            iter->next = current->prev;
+    }
+    return current;
+}
+
+/* Search the list for a node matching a given key.
+ * The match is performed using the 'match' method
+ * set with listSetMatchMethod(). If no 'match' method
+ * is set, the 'value' pointer of every node is directly
+ * compared with the 'key' pointer.
+ *
+ * On success the first matching node pointer is returned
+ * (search starts from head). If no matching node exists
+ * NULL is returned. */
+listNode *listSearchKey(list *list, void *key)
+{
+    listIter iter;
+    listNode *node;
+
+    listRewind(list, &iter);
+    while((node = listNext(&iter)) != NULL) {
+        if (list->match) {
+            if (list->match(node->value, key)) {
+                return node;
+            }
+        } else {
+            if (key == node->value) {
+                return node;
+            }
+        }
+    }
+    return NULL;
+}
+
 /* Rotate the list removing the tail node and inserting it to the head. */
 void listRotate(list *list) {
     listNode *tail = list->tail;

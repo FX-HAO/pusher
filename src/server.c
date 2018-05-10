@@ -43,6 +43,43 @@ long long ustime(void) {
     return ust;
 }
 
+/*====================== Hash table type implementation  ==================== */
+
+/* This is a hash table type that uses the SDS dynamic strings library as
+ * keys and redis objects as values (objects can hold SDS strings,
+ * lists, sets). */
+
+uint64_t dictSdsCaseHash(const void *key) {
+    return dictGenCaseHashFunction((unsigned char*)key, sdslen((char*)key));
+}
+
+/* A case insensitive version used for the command lookup table and other
+ * places where case insensitive non binary-safe comparison is needed. */
+int dictSdsKeyCaseCompare(void *privdata, const void *key1,
+        const void *key2)
+{
+    DICT_NOTUSED(privdata);
+
+    return strcasecmp(key1, key2) == 0;
+}
+
+void dictSdsDestructor(void *privdata, void *val)
+{
+    DICT_NOTUSED(privdata);
+
+    sdsfree(val);
+}
+
+/* Command table. sds string -> command struct pointer. */
+dictType commandTableDictType = {
+    dictSdsCaseHash,            /* hash function */
+    NULL,                       /* key dup */
+    NULL,                       /* val dup */
+    dictSdsKeyCaseCompare,      /* key compare */
+    dictSdsDestructor,          /* key destructor */
+    NULL                        /* val destructor */
+};
+
 /* Return the UNIX time in milliseconds */
 mstime_t mstime(void) {
     return ustime()/1000;
@@ -122,6 +159,10 @@ void serverLogFromHandler(int level, const char *msg) {
     if (write(fd,"\n",1) == -1) goto err;
 err:
     return;
+}
+
+struct pusherCommand *lookupCommand(sds name) {
+    return dictFetchValue(server.commands, name);
 }
 
 /* We take a cached value of the unix time in the global state because with
@@ -240,6 +281,8 @@ void initServerConfig(void) {
     server.tcpkeepalive = CONFIG_DEFAULT_TCP_KEEPALIVE;
     server.maxclients = CONFIG_DEFAULT_MAX_CLIENTS;
     server.maxmemory = CONFIG_DEFAULT_MAXMEMORY;
+    server.commands = dictCreate(&commandTableDictType,NULL);
+    populateCommandTable();
 }
 
 static void sigShutdownHandler(int sig) {
@@ -440,6 +483,18 @@ void initServer(void) {
     }
     
     server.initial_memory_usage = zmalloc_used_memory();
+}
+
+/* Populates the Redis Command Table starting from the hard coded list
+ * we have on top of redis.c file. */
+void populateCommandTable(void) {
+    int j;
+    int numcommands = sizeof(pusherCommandTable)/sizeof(struct pusherCommand);
+
+    for (j = 0; j < numcommands; j++) {
+        struct pusherCommand *c = pusherCommandTable+j;
+        dictAdd(server.commands, sdsnew(c->name), c);
+    }
 }
 
 int main(int argc, char **argv) {

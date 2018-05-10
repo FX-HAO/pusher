@@ -18,6 +18,7 @@
 #include "zmalloc.h"
 #include "sds.h"
 #include "adlist.h"
+#include "dict.h"
 #include "anet.h"
 #include "ae.h"
 
@@ -43,7 +44,9 @@
                                        handler is yet not installed. */
 
 /* We can print the stacktrace, so our assert is defined this way: */
+#define serverAssert(_e) ((_e)?(void)0 : (_serverAssert(#_e,__FILE__,__LINE__),_exit(1)))
 #define serverPanic(...) _serverPanic(__FILE__,__LINE__,__VA_ARGS__),_exit(1)
+
 
 /* Using the following macro you can run code inside serverCron() with the
  * specified period, specified in milliseconds.
@@ -95,6 +98,7 @@ struct server {
     /* General */
     pid_t pid;                  /* Main process pid. */
     aeEventLoop *el;
+    dict *commands;             /* Command table */
     size_t initial_memory_usage; /* Bytes used after initialization. */
 
     int ipfd[CONFIG_BINDADDR_MAX]; /* TCP socket file descriptors */
@@ -156,6 +160,8 @@ extern struct server server;
 
 /* Core functions */
 void serverLog(int level, const char *fmt, ...);
+struct pusherCommand *lookupCommand(sds name);
+void populateCommandTable(void);
 
 /* Utils */
 long long ustime(void);
@@ -175,7 +181,7 @@ void addReplyLongLong(client *c, long long ll);
 void addReplyError(client *c, const char *err);
 void addReplyErrorFormat(client *c, const char *fmt, ...);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
-void echoMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
+void readMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
 int handleClientsWithPendingWrites(void);
 
 /* Commands prototypes */
@@ -185,6 +191,7 @@ void pingCommand(client *c);
 void publishCommand(client *c);
 
 /* Debugging stuff */
+void _serverAssert(const char *estr, const char *file, int line);
 void _serverPanic(const char *file, int line, const char *msg, ...);
 
 #endif /* __SERVER_H__ */

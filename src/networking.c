@@ -44,23 +44,34 @@ client *createClient(int fd) {
     c->argv = NULL;
     c->reply = listCreate();
     c->reply_bytes = 0;
+    c->sentlen = 0;
     listSetFreeMethod(c->reply,freeClientReplyValue);
     listSetDupMethod(c->reply,dupClientReplyValue);
     c->bufpos = 0;
     c->ctime = c->lastinteraction = server.unixtime;
     c->flags = 0;
+    c->client_list_node = NULL;
     if (fd != -1) linkClient(c);
     return c;
 }
 
 void unlinkClient(client *c) {
-    if (c->fd == -1) 
-        return;
+    listNode *ln;
+
+    if (c->fd == -1) return;
 
     /* Remove from the list of active clients. */
     if (c->client_list_node) {
         listDelNode(server.clients, c->client_list_node);
         c->client_list_node = NULL;
+    }
+
+    /* Remove from the list of pending writes if needed. */
+    if (c->flags & CLIENT_PENDING_WRITE) {
+        ln = listSearchKey(server.clients_pending_write,c);
+        serverAssert(ln != NULL);
+        listDelNode(server.clients_pending_write,ln);
+        c->flags &= ~CLIENT_PENDING_WRITE;
     }
 
     /* Unregister async I/O handlers and close the socket. */
@@ -70,8 +81,20 @@ void unlinkClient(client *c) {
     c->fd = -1;
 }
 
+static void freeClientArgv(client *c) {
+    int j;
+    for (j = 0; j < c->argc; j++)
+        sdsfree(c->argv[j]);
+    c->argc = 0;
+}
+
 void freeClient(client *c) {
+    /* Free data structures. */
+    listRelease(c->reply);
+    freeClientArgv(c);
+
     unlinkClient(c);
+    zfree(c->argv);
     zfree(c);
 }
 
@@ -109,6 +132,10 @@ int prepareClientToWrite(client *c) {
          * we'll not be able to write the whole reply at once. */
         c->flags |= CLIENT_PENDING_WRITE;
         listAddNodeHead(server.clients_pending_write, c);
+        if (c == NULL)
+            exit(-1);
+        if (server.clients_pending_write->head == NULL)
+            exit(-1);
     }
 
     /* Authorize the caller to queue in the output buffer of this client. */
@@ -134,8 +161,9 @@ int _addReplyToBuffer(client *c, const char *s, size_t len) {
 
 void _addReplyStringToList(client *c, const char *s, size_t len) {
     sds node = sdsnewlen(s,len);
+    node = sdscatlen(node, "\r\n", 2);
     listAddNodeTail(c->reply,node);
-    c->reply_bytes += len;
+    c->reply_bytes += len+2;
 }
 
 /* -----------------------------------------------------------------------------
@@ -237,7 +265,8 @@ int writeToClient(int fd, client *c, int handler_installed) {
                 /* If there are no longer objects in the list, we expect
                  * the count of reply bytes to be exactly zero. */
                 if (listLength(c->reply) == 0)
-                    if (c->reply_bytes != 0) exit(-1);
+                    if (c->reply_bytes != 0) 
+                        serverAssert(c->reply_bytes == 0);
             }
         }
     }
@@ -272,10 +301,12 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
  * need to use a syscall in order to install the writable event handler,
  * get it called, and so forth. */
 int handleClientsWithPendingWrites(void) {
-    listNode *ln = listFirst(server.clients_pending_write);
+    listIter li;
+    listNode *ln;
     int processed = listLength(server.clients_pending_write);
 
-    while(ln != NULL) {
+    listRewind(server.clients_pending_write, &li);
+    while((ln = listNext(&li)) != NULL) {
         client *c = listNodeValue(ln);
         c->flags &= ~CLIENT_PENDING_WRITE;
         listDelNode(server.clients_pending_write,ln);
@@ -293,7 +324,6 @@ int handleClientsWithPendingWrites(void) {
                 /* Nothing to do, Just to avoid the warning... */                
             }
         }
-        ln = listNodeNext(ln);
     }
     return processed;
 }
@@ -301,15 +331,36 @@ int handleClientsWithPendingWrites(void) {
 #define READ_MESSAGE_LENGTH (16*1024)
 void readMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     client *c = (client*) privdata;
-    int nread, nwrite;
+    int nread;
     char readbuf[READ_MESSAGE_LENGTH];
+    struct pusherCommand *cmd;
+    sds *argv;
     UNUSED(el);
     UNUSED(mask);
 
     nread = read(fd, readbuf, READ_MESSAGE_LENGTH);
 
+    /* remove CRLF */
+    if (!strncmp(readbuf+nread-2, "\r\n", 2)) 
+        nread -= 2;
+
+    if (nread <= 0) 
+        return;
+
     /* build argc and argv */
-    c->argv = sdssplitlen(readbuf, nread, " ", 1, &c->argc);
-    pingCommand(c);
-    // addReplyString(c, readbuf, nread);
+
+    argv = sdssplitlen(readbuf, nread, " ", 1, &c->argc);
+    if (c->argc) zfree(c->argv);
+    c->argv = argv;
+    if ((cmd = lookupCommand(c->argv[0])) == NULL) {
+        addReplyErrorFormat(c,"ERR unknown command '%s'",
+            c->argv[0]);
+        return;
+    } else if ((cmd->arity > 0 && cmd->arity != c->argc) ||
+               (c->argc < -cmd->arity)) {
+        addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
+            cmd->name);
+        return;
+    }
+    cmd->proc(c);
 }
