@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __REDIS_UTIL_H
-#define __REDIS_UTIL_H
+#ifndef __PUSHER_UTIL_H
+#define __PUSHER_UTIL_H
 
 #include <stdint.h>
 #include "sds.h"
@@ -52,7 +52,7 @@ int ld2string(char *buf, size_t len, long double value, int humanfriendly);
 sds getAbsolutePath(char *filename);
 int pathIsBaseName(char *path);
 
-#ifdef REDIS_TEST
+#ifdef PUSHER_TEST
 int utilTest(int argc, char **argv);
 #endif
 

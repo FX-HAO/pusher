@@ -46,8 +46,7 @@ long long ustime(void) {
 /*====================== Hash table type implementation  ==================== */
 
 /* This is a hash table type that uses the SDS dynamic strings library as
- * keys and redis objects as values (objects can hold SDS strings,
- * lists, sets). */
+ * keys. */
 
 uint64_t dictSdsCaseHash(const void *key) {
     return dictGenCaseHashFunction((unsigned char*)key, sdslen((char*)key));
@@ -141,7 +140,7 @@ void serverLog(int level, const char *fmt, ...) {
  * safe to call from a signal handler.
  *
  * We actually use this only for signals that are not fatal from the point
- * of view of Redis. Signals that are going to kill the server anyway and
+ * of view of Pusher. Signals that are going to kill the server anyway and
  * where we need printf-alike features are served by serverLog(). */
 void serverLogFromHandler(int level, const char *msg) {
     int fd;
@@ -259,7 +258,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     return 1000/server.hz;
 }
 
-/* This function gets called every time Redis is entering the
+/* This function gets called every time server is entering the
  * main loop of the event driven library, that is, before to sleep
  * for ready file descriptors. */
 void beforeSleep(struct aeEventLoop *eventLoop) {
@@ -485,8 +484,8 @@ void initServer(void) {
     server.initial_memory_usage = zmalloc_used_memory();
 }
 
-/* Populates the Redis Command Table starting from the hard coded list
- * we have on top of redis.c file. */
+/* Populates the Pusher Command Table starting from the hard coded list
+ * we have on top of server.c file. */
 void populateCommandTable(void) {
     int j;
     int numcommands = sizeof(pusherCommandTable)/sizeof(struct pusherCommand);

@@ -186,11 +186,7 @@ void addReplySds(client *c, sds s) {
 /* This low level function just adds whatever protocol you send it to the
  * client buffer, trying the static buffer initially, and using the string
  * of objects if not possible.
- *
- * It is efficient because does not create an SDS object nor an Redis object
- * if not needed. The object will only be created by calling
- * _addReplyStringToList() if we fail to extend the existing tail object
- * in the list of objects. */
+ */
 void addReplyString(client *c, const char *s, size_t len) {
     if (prepareClientToWrite(c) != C_OK) return;
     _addReplyStringToList(c,s,len);
