@@ -7,7 +7,19 @@ The program is currently still a work in progress.
 
 ```c
 make install
+```
+
+## Usage
+
+```
 src/pusher-server
+```
+
+Making a connection in a new terminal window
+```
+telnet 127.0.0.1 9528
+PING
+PONG
 ```
 
 ## Cleanup
