@@ -1,6 +1,6 @@
 # Pusher
 
-Pusher is a pub/sub messaging service inspired by the [Pusher](https://pusher.com/).
+Pusher is a pub/sub messaging service inspired by [Pusher](https://pusher.com/).
 The program is currently still a work in progress.
 
 ## Installation
