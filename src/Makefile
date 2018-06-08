@@ -12,7 +12,7 @@ endif
 FINAL_CFLAGS=$(STD) $(WARN) $(OPT) $(DEBUG) $(CFLAGS)
 DEBUG=-g -ggdb
 
-PUSHER_SERVER_OBJ=adlist.o ae.o anet.o zmalloc.o networking.o debug.o server.o sds.o dict.o util.o siphash.o
+PUSHER_SERVER_OBJ=adlist.o ae.o anet.o zmalloc.o networking.o debug.o server.o sds.o dict.o util.o siphash.o thread_pool.o
 
 all: pusher-server
 

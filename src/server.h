@@ -21,6 +21,7 @@
 #include "dict.h"
 #include "anet.h"
 #include "ae.h"
+#include "thread_pool.h"
 
 #define PROTO_BUFFER_BYTES (16*1024)
 
@@ -73,6 +74,8 @@ typedef struct client {
     /* Response buffer */
     int bufpos;
     char buf[PROTO_BUFFER_BYTES];
+
+    pthread_mutex_t lock;
 } client;
 
 /* Static server configuration */
@@ -87,6 +90,8 @@ typedef struct client {
 #define CONFIG_MIN_RESERVED_FDS 32
 #define NET_IP_STR_LEN 46 /* INET6_ADDRSTRLEN is 46, but we need to be sure */
 #define LOG_MAX_LEN    1024 /* Default maximum length of syslog messages */
+#define CONFIG_DEFAULT_THREADS 10 /* Default number of threads */
+#define CONFIG_DEFAULT_MAX_TASKS 100 /* Default maximum size of thread tasks */
 
 /* When configuring the server eventloop, we setup it so that the total number
  * of file descriptors we can handle are server.maxclients + RESERVED_FDS +
@@ -128,6 +133,7 @@ struct server {
     /* Limits */
     unsigned int maxclients;            /* Max number of simultaneous clients */
     unsigned long long maxmemory;   /* Max number of memory bytes to use */
+    thread_pool_t *tpool;  /* thread pool */
 
     /* Fields used only for stats */
     long long stat_rejected_conn;   /* Clients rejected because of maxclients */
@@ -138,6 +144,7 @@ struct server {
     /* Mutexes used to protect atomic variables when atomic builtins are
      * not available. */
     pthread_mutex_t next_client_id_mutex;
+    pthread_mutex_t lock;
 };
 
 typedef void pusherCommandProc(client *c);
@@ -159,7 +166,6 @@ extern struct server server;
  *----------------------------------------------------------------------------*/
 
 /* Core functions */
-void serverLog(int level, const char *fmt, ...);
 struct pusherCommand *lookupCommand(sds name);
 void populateCommandTable(void);
 

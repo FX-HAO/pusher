@@ -1,5 +1,6 @@
 #include "server.h"
 #include "atomicvar.h"
+#include "thread_pool.h"
 
 void linkClient(client *c) {
     listAddNodeTail(server.clients, c);
@@ -20,6 +21,7 @@ void freeClientReplyValue(void *o) {
 
 client *createClient(int fd) {
     client *c;
+    int err;
 
     if ((c = zmalloc(sizeof(*c))) == NULL) return NULL;
     if (fd != -1) {
@@ -51,6 +53,7 @@ client *createClient(int fd) {
     c->ctime = c->lastinteraction = server.unixtime;
     c->flags = 0;
     c->client_list_node = NULL;
+    pthread_mutex_init(&c->lock, NULL);
     if (fd != -1) linkClient(c);
     return c;
 }
@@ -132,10 +135,6 @@ int prepareClientToWrite(client *c) {
          * we'll not be able to write the whole reply at once. */
         c->flags |= CLIENT_PENDING_WRITE;
         listAddNodeHead(server.clients_pending_write, c);
-        if (c == NULL)
-            exit(-1);
-        if (server.clients_pending_write->head == NULL)
-            exit(-1);
     }
 
     /* Authorize the caller to queue in the output buffer of this client. */
@@ -174,12 +173,15 @@ void _addReplyStringToList(client *c, const char *s, size_t len) {
 /* Add the SDS 's' string to the client output buffer, as a side effect
  * the SDS string is freed. */
 void addReplySds(client *c, sds s) {
+    pthread_mutex_lock(&server.lock);
     if (prepareClientToWrite(c) != C_OK) {
         /* The caller expects the sds to be free'd. */
+        pthread_mutex_unlock(&server.lock);
         sdsfree(s);
         return;
     }
     _addReplyStringToList(c,s,sdslen(s));
+    pthread_mutex_unlock(&server.lock);
     sdsfree(s);
 }
 
@@ -188,8 +190,13 @@ void addReplySds(client *c, sds s) {
  * of objects if not possible.
  */
 void addReplyString(client *c, const char *s, size_t len) {
-    if (prepareClientToWrite(c) != C_OK) return;
+    pthread_mutex_lock(&server.lock);
+    if (prepareClientToWrite(c) != C_OK) {
+        pthread_mutex_unlock(&server.lock);
+        return;
+    }
     _addReplyStringToList(c,s,len);
+    pthread_mutex_unlock(&server.lock);
 }
 
 void addReplyLongLongWithPrefix(client *c, long long ll, char prefix) {
@@ -299,6 +306,9 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
 int handleClientsWithPendingWrites(void) {
     listIter li;
     listNode *ln;
+    
+    pthread_mutex_lock(&server.lock);
+
     int processed = listLength(server.clients_pending_write);
 
     listRewind(server.clients_pending_write, &li);
@@ -321,8 +331,16 @@ int handleClientsWithPendingWrites(void) {
             }
         }
     }
+
+    pthread_mutex_unlock(&server.lock);
+
     return processed;
 }
+
+// static void thread_func(void *data) {
+//     struct pusherCommand *cmd = (struct pusherCommand*)data;
+//     cmd->proc(1);
+// }
 
 #define READ_MESSAGE_LENGTH (16*1024)
 void readMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
@@ -331,6 +349,7 @@ void readMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     char readbuf[READ_MESSAGE_LENGTH];
     struct pusherCommand *cmd;
     sds *argv;
+    thread_task_t *task;
     UNUSED(el);
     UNUSED(mask);
 
@@ -358,5 +377,11 @@ void readMessageFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
             cmd->name);
         return;
     }
-    cmd->proc(c);
+
+    if ((task = zmalloc(sizeof(*task))) == NULL) return;
+    task->handler = cmd->proc;
+    task->data = c;
+    task->free = NULL;
+    thread_task_post(server.tpool, task);
+    // cmd->proc(c);
 }

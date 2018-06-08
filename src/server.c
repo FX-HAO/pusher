@@ -1,6 +1,7 @@
 #include "server.h"
 #include "adlist.h"
 #include "atomicvar.h"
+#include "thread_pool.h"
 
 #include <time.h>
 #include <sys/time.h>
@@ -270,6 +271,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
 
 void initServerConfig(void) {
     pthread_mutex_init(&server.next_client_id_mutex, NULL);
+    pthread_mutex_init(&server.lock, NULL);
 
     server.hz = CONFIG_DEFAULT_HZ;
     server.port = CONFIG_DEFAULT_SERVER_PORT;
@@ -482,6 +484,8 @@ void initServer(void) {
     }
     
     server.initial_memory_usage = zmalloc_used_memory();
+
+    server.tpool = thread_pool_create("pusher-server", CONFIG_DEFAULT_THREADS, CONFIG_DEFAULT_MAX_TASKS);
 }
 
 /* Populates the Pusher Command Table starting from the hard coded list
